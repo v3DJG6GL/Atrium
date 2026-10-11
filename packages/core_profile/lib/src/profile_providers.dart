@@ -62,6 +62,12 @@ class ProfileListController extends AsyncNotifier<List<Profile>> {
     await _reload();
   }
 
+  /// Replaces several instances of a profile in one write.
+  Future<void> upsertInstances(String profileId, List<Instance> changed) async {
+    await _repo.upsertInstances(profileId, changed);
+    await _reload();
+  }
+
   Future<void> deleteInstance(String profileId, String instanceId) async {
     await _repo.deleteInstance(profileId, instanceId);
     await _reload();

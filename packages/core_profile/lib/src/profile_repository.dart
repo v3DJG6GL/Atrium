@@ -108,15 +108,48 @@ class ProfileRepository {
     await saveProfile(profile.copyWith(instances: next));
   }
 
+  /// Replaces several instances of a profile (matched by id) in one write.
+  /// Instances whose id isn't in the profile yet are appended.
+  ///
+  /// Used where one change spans instances, such as moving a link from one
+  /// Bazarr to another.
+  Future<void> upsertInstances(
+    String profileId,
+    List<Instance> changed,
+  ) async {
+    if (changed.isEmpty) {
+      return;
+    }
+    final Profile? profile = await getProfile(profileId);
+    if (profile == null) {
+      throw StateError('No profile with id $profileId');
+    }
+    final List<Instance> next = List<Instance>.of(profile.instances);
+    for (final Instance instance in changed) {
+      final int idx = next.indexWhere((Instance i) => i.id == instance.id);
+      if (idx >= 0) {
+        next[idx] = instance;
+      } else {
+        next.add(instance);
+      }
+    }
+    await saveProfile(profile.copyWith(instances: next));
+  }
+
   /// Removes an instance and its secret from a profile.
+  ///
+  /// Links other instances hold to it are dropped too, which puts them back
+  /// on automatic rather than leaving them pointing at nothing.
   Future<void> deleteInstance(String profileId, String instanceId) async {
     final Profile? profile = await getProfile(profileId);
     if (profile == null) {
       return;
     }
     await _secrets.delete(_authKey(instanceId));
-    final List<Instance> next =
-        profile.instances.where((Instance i) => i.id != instanceId).toList();
+    final List<Instance> next = profile.instances
+        .where((Instance i) => i.id != instanceId)
+        .map((Instance i) => _withoutLinksTo(i, instanceId))
+        .toList();
     await saveProfile(profile.copyWith(instances: next));
   }
 
@@ -150,13 +183,25 @@ class ProfileRepository {
   /// Imports a profile from [json]. Fresh ids are minted for the profile and
   /// every instance so an import never collides with existing entries, and
   /// secrets (if present in the JSON) land in the keystore.
+  ///
+  /// Links between the imported instances follow them to their new ids. A
+  /// link to an instance that isn't part of the import is dropped, so that
+  /// side goes back to automatic.
   Future<Profile> importProfile(String json) async {
     final Profile incoming =
         Profile.fromJson(jsonDecode(json) as Map<String, dynamic>);
+    final Map<String, String> newIds = <String, String>{
+      for (final Instance i in incoming.instances) i.id: _uuid.v4(),
+    };
     final Profile reIded = incoming.copyWith(
       id: _uuid.v4(),
       instances: incoming.instances
-          .map((Instance i) => i.copyWith(id: _uuid.v4()))
+          .map(
+            (Instance i) => i.copyWith(
+              id: newIds[i.id]!,
+              links: _remapLinks(i.links, newIds),
+            ),
+          )
           .toList(),
     );
     await saveProfile(reIded);
@@ -164,6 +209,30 @@ class ProfileRepository {
   }
 
   String _authKey(String instanceId) => 'instance:$instanceId:auth';
+
+  static Map<String, String> _remapLinks(
+    Map<String, String> links,
+    Map<String, String> newIds,
+  ) =>
+      <String, String>{
+        for (final MapEntry<String, String> e in links.entries)
+          if (e.value == Instance.linkNone)
+            e.key: e.value
+          else if (newIds[e.value] case final String id)
+            e.key: id,
+      };
+
+  static Instance _withoutLinksTo(Instance instance, String instanceId) {
+    if (!instance.links.containsValue(instanceId)) {
+      return instance;
+    }
+    return instance.copyWith(
+      links: <String, String>{
+        for (final MapEntry<String, String> e in instance.links.entries)
+          if (e.value != instanceId) e.key: e.value,
+      },
+    );
+  }
 
   Future<void> _writeSecret(Instance instance) async {
     await _secrets.write(
