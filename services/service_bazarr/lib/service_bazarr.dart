@@ -19,3 +19,5 @@ export 'src/subtitles/bazarr_subtitle_providers.dart';
 export 'src/subtitles/bazarr_version.dart';
 export 'src/subtitles/job_watch.dart';
 export 'src/subtitles/subtitle_actions.dart';
+export 'src/subtitles/ui/movie_subtitles_card.dart';
+export 'src/subtitles/ui/subtitles_block.dart';
