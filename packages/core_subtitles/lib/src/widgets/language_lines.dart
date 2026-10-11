@@ -114,7 +114,10 @@ class LanguageLines extends StatelessWidget {
     }
 
     if (onTap == null) return body;
+    // A node of its own, so a tappable line inside a tappable row stays
+    // reachable by screen readers instead of merging into the row.
     return Semantics(
+      container: true,
       button: true,
       label: semanticLabel,
       excludeSemantics: semanticLabel != null,
