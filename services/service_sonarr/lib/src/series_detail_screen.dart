@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:core_models/core_models.dart';
+import 'package:core_subtitles/core_subtitles.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,6 +131,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     ref.invalidate(sonarrEpisodesProvider((widget.instance, widget.series.id)));
     ref.invalidate(sonarrSeriesProvider(widget.instance));
     ref.invalidate(sonarrQueueProvider(widget.instance));
+    ref.read(subtitlesBridgeProvider).refresh(widget.instance, widget.series.id);
   }
 
   @override
@@ -137,6 +139,25 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     final ThemeData theme = Theme.of(context);
     final ColorScheme cs = theme.colorScheme;
     final SonarrApi? api = ref.watch(sonarrApiProvider(widget.instance)).value;
+
+    // Subtitles from the Bazarr serving this Sonarr, if any.
+    final SubtitlesBridge bridge = ref.watch(subtitlesBridgeProvider);
+    final SeriesSubtitles subs =
+        ref.watch(bridge.series(widget.instance, widget.series.id));
+    final Map<int, SonarrEpisode> episodesById = <int, SonarrEpisode>{
+      for (final SonarrEpisode e
+          in widget.episodesAsync.value ?? const <SonarrEpisode>[])
+        e.id: e,
+    };
+    final SeriesSubtitlesRef subsRef = SeriesSubtitlesRef(
+      seriesId: widget.series.id,
+      title: widget.series.title,
+      originalLanguage: widget.series.originalLanguage?.name,
+      episodeInfo: (int id) {
+        final SonarrEpisode? e = episodesById[id];
+        return e == null ? null : _episodeSubtitlesInfo(e);
+      },
+    );
 
     final SonarrImage? poster = widget.series.images
         .firstWhereOrNull((SonarrImage i) => i.coverType == 'poster');
@@ -206,6 +227,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                 instance: widget.instance,
                 series: widget.series,
                 onRefreshed: _invalidateProviders,
+                subtitles: subs,
+                subtitlesRef: subsRef,
               ),
             ],
             title: CollapsedTitle(
@@ -289,6 +312,13 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                   const SizedBox(height: Insets.lg),
                   _InfoSection(series: widget.series),
                 ],
+
+                // Subtitle coverage; owns its top spacing and renders
+                // nothing without a Bazarr.
+                bridge.seriesSection(
+                  sonarr: widget.instance,
+                  series: subsRef,
+                ),
 
                 const SizedBox(height: Insets.xl),
 
@@ -381,6 +411,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           context,
                           episodesBySeason,
                           sortedSeasons,
+                          subs,
+                          subsRef,
                         ),
                       ),
                     ];
@@ -443,6 +475,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     BuildContext context,
     Map<int, List<SonarrEpisode>> episodesBySeason,
     List<int> sortedSeasons,
+    SeriesSubtitles subtitles,
+    SeriesSubtitlesRef subtitlesRef,
   ) {
     return sortedSeasons.map((int seasonNum) {
       final List<SonarrEpisode> seasonEpisodes = episodesBySeason[seasonNum]!
@@ -471,6 +505,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
             });
           },
           onRefreshed: () => _refresh(context),
+          subtitles: subtitles,
+          subtitlesRef: subtitlesRef,
         ),
       );
     }).toList();
@@ -992,6 +1028,8 @@ class _SeasonCard extends ConsumerWidget {
     required this.isExpanded,
     required this.onToggleExpand,
     required this.onRefreshed,
+    required this.subtitles,
+    required this.subtitlesRef,
   });
 
   final Instance instance;
@@ -1002,6 +1040,8 @@ class _SeasonCard extends ConsumerWidget {
   final bool isExpanded;
   final ValueChanged<bool> onToggleExpand;
   final VoidCallback onRefreshed;
+  final SeriesSubtitles subtitles;
+  final SeriesSubtitlesRef subtitlesRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1012,6 +1052,10 @@ class _SeasonCard extends ConsumerWidget {
     final int total = episodes.length;
     final double progress = total > 0 ? downloaded / total : 0.0;
     final bool isMonitored = seasonMeta?.monitored ?? false;
+    final SeriesSubtitles subtitles = this.subtitles;
+    final int subtitleGaps = subtitles is SeriesSubtitlesReady
+        ? subtitles.gapsBySeason[seasonNumber] ?? 0
+        : 0;
 
     final double seasonSizeBytes = episodes
         .where((e) => e.hasFile)
@@ -1181,6 +1225,20 @@ class _SeasonCard extends ConsumerWidget {
                     ),
                   ),
 
+                  // Episodes missing subtitles, with a menu to search them
+                  if (subtitleGaps > 0)
+                    _SeasonSubtitleGaps(
+                      gaps: subtitleGaps,
+                      onSearch: () => ref
+                          .read(subtitlesBridgeProvider)
+                          .searchSeasonMissing(
+                            context,
+                            sonarr: instance,
+                            seriesId: series.id,
+                            season: seasonNumber,
+                          ),
+                    ),
+
                   // Expand indicator
                   AnimatedRotation(
                     turns: isExpanded ? 0.5 : 0,
@@ -1284,6 +1342,8 @@ class _SeasonCard extends ConsumerWidget {
                         episode: episode,
                         downloadingItem: downloadingItem,
                         dlProgress: dlProgress,
+                        subtitles: subtitles,
+                        subtitlesRef: subtitlesRef,
                       );
                     },
                   ),
@@ -1531,6 +1591,8 @@ class _EpisodeRow extends ConsumerWidget {
     required this.episode,
     required this.downloadingItem,
     required this.dlProgress,
+    required this.subtitles,
+    required this.subtitlesRef,
   });
 
   final Instance instance;
@@ -1538,6 +1600,8 @@ class _EpisodeRow extends ConsumerWidget {
   final SonarrEpisode episode;
   final SonarrQueueItem? downloadingItem;
   final double? dlProgress;
+  final SeriesSubtitles subtitles;
+  final SeriesSubtitlesRef subtitlesRef;
 
   Future<void> _toggleEpisodeMonitored(
     BuildContext context,
@@ -1615,6 +1679,23 @@ class _EpisodeRow extends ConsumerWidget {
     final downloadingItem = this.downloadingItem;
     final dlProgress = this.dlProgress;
 
+    // Audio and subtitle languages, when a Bazarr serves this series.
+    final SeriesSubtitles subtitles = this.subtitles;
+    final EpisodeSubtitleTags? tags = subtitles is SeriesSubtitlesReady
+        ? subtitles.episodes[episode.id]
+        : null;
+    final List<AudioTag> audio = subtitles is SeriesSubtitlesOff ||
+            !isDownloaded
+        ? const <AudioTag>[]
+        : mediaAudioTags(
+            _mediaInfoString(episode, 'audioLanguages'),
+            tags?.bazarrAudio,
+            originalLanguage: subtitlesRef.originalLanguage,
+          );
+    final bool showLanguages = subtitles is! SeriesSubtitlesOff &&
+        isDownloaded &&
+        (tags != null || audio.isNotEmpty);
+
     return InkWell(
       onTap: () => _showEpisodeBottomSheet(
         context: context,
@@ -1622,6 +1703,8 @@ class _EpisodeRow extends ConsumerWidget {
         instance: instance,
         series: series,
         episode: episode,
+        subtitles: subtitles,
+        subtitlesRef: subtitlesRef,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -1708,7 +1791,7 @@ class _EpisodeRow extends ConsumerWidget {
                         ),
                       ),
                     ],
-                  ] else
+                  ] else ...[
                     Text(
                       subtitleText,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -1717,6 +1800,36 @@ class _EpisodeRow extends ConsumerWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (showLanguages)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        // Its own semantics node, so screen readers reach
+                        // this button apart from the row's.
+                        child: Semantics(
+                          container: true,
+                          child: LanguageLines(
+                            audio: audio,
+                            subtitles: tags?.chips,
+                            // Its own InkWell, so a tap here opens the
+                            // subtitles rather than the episode sheet.
+                            onTap: tags == null
+                                ? null
+                                : () => ref
+                                    .read(subtitlesBridgeProvider)
+                                    .openEpisode(
+                                      context,
+                                      sonarr: instance,
+                                      series: subtitlesRef,
+                                      episodeId: episode.id,
+                                    ),
+                            semanticLabel: '${_episodeCode(
+                              episode.seasonNumber,
+                              episode.episodeNumber,
+                            )} subtitles',
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -1745,8 +1858,13 @@ void _showEpisodeBottomSheet({
   required Instance instance,
   required SonarrSeries series,
   required SonarrEpisode episode,
+  required SeriesSubtitles subtitles,
+  required SeriesSubtitlesRef subtitlesRef,
 }) {
   final ThemeData theme = Theme.of(context);
+  // Bazarr lists this episode: offer its subtitles.
+  final bool showSubtitles = subtitles is SeriesSubtitlesReady &&
+      subtitles.episodes.containsKey(episode.id);
   final ColorScheme cs = theme.colorScheme;
 
   final Map<String, dynamic>? fileMap = episode.episodeFile;
@@ -1761,8 +1879,9 @@ void _showEpisodeBottomSheet({
 
   showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
     showDragHandle: true,
-    builder: (BuildContext context) {
+    builder: (BuildContext sheetContext) {
       return SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -1845,7 +1964,7 @@ void _showEpisodeBottomSheet({
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () async {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           try {
                             final api = await ref
                                 .read(sonarrApiProvider(instance).future);
@@ -1895,7 +2014,7 @@ void _showEpisodeBottomSheet({
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () async {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           try {
                             final api = await ref
                                 .read(sonarrApiProvider(instance).future);
@@ -1947,7 +2066,7 @@ void _showEpisodeBottomSheet({
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           pushScreen<void>(
                             context,
                             SonarrReleaseSearchScreen(
@@ -1982,7 +2101,7 @@ void _showEpisodeBottomSheet({
                         child: IconButton.filledTonal(
                           icon: Icon(Icons.delete_outline, color: cs.error),
                           onPressed: () async {
-                            Navigator.pop(context);
+                            Navigator.pop(sheetContext);
                             bool unmonitor = false;
                             final confirm = await showDialog<bool>(
                               context: context,
@@ -2086,12 +2205,175 @@ void _showEpisodeBottomSheet({
                     ],
                   ],
                 ),
+
+                // Subtitles from the Bazarr serving this series
+                if (showSubtitles) ...[
+                  const SizedBox(height: Insets.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      icon: const Icon(Icons.closed_caption_outlined),
+                      label: const Text('Subtitles'),
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        ref.read(subtitlesBridgeProvider).openEpisode(
+                              context,
+                              sonarr: instance,
+                              series: subtitlesRef,
+                              episodeId: episode.id,
+                            );
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ),
       );
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Subtitles — the bridge to a linked Bazarr
+// ---------------------------------------------------------------------------
+
+/// A season header's subtitle gap count; tapping it offers a search for the
+/// season's missing subtitles.
+class _SeasonSubtitleGaps extends StatelessWidget {
+  const _SeasonSubtitleGaps({required this.gaps, required this.onSearch});
+
+  final int gaps;
+  final VoidCallback onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      menuChildren: <Widget>[
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.closed_caption_outlined),
+          onPressed: onSearch,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('Search missing subtitles'),
+              Text(
+                '$gaps episode${gaps == 1 ? '' : 's'} missing a language',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      builder: (
+        BuildContext context,
+        MenuController controller,
+        Widget? child,
+      ) {
+        // Its own InkWell, so a tap here opens the menu rather than
+        // expanding the season.
+        return Semantics(
+          button: true,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Radii.sm),
+            onTap: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Insets.sm,
+                vertical: Insets.xs,
+              ),
+              child: SeasonGapBadge(gaps: gaps),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "S01E02".
+String _episodeCode(int season, int episode) =>
+    'S${season.toString().padLeft(2, '0')}'
+    'E${episode.toString().padLeft(2, '0')}';
+
+/// The episode file's `mediaInfo`, when Sonarr sent one.
+Map<String, dynamic>? _mediaInfo(SonarrEpisode episode) {
+  final Object? info = episode.episodeFile?['mediaInfo'];
+  return info is Map<String, dynamic> ? info : null;
+}
+
+/// A string field of the episode file's `mediaInfo`.
+String? _mediaInfoString(SonarrEpisode episode, String key) {
+  final Object? value = _mediaInfo(episode)?[key];
+  return value is String && value.trim().isNotEmpty ? value : null;
+}
+
+/// "1080p" from "1920x1080", bucketed by the longest side so cropped
+/// cinemascope rips (3840x1600) still read as 4K.
+String _formatResolution(String resolution) {
+  final List<int> sides = resolution
+      .toLowerCase()
+      .split('x')
+      .map((String n) => int.tryParse(n.trim()) ?? 0)
+      .toList();
+  final int longest = sides.fold(0, (int a, int b) => b > a ? b : a);
+  if (longest >= 3000) return '4K';
+  if (longest >= 1800) return '1080p';
+  if (longest >= 1200) return '720p';
+  if (longest >= 700) return '480p';
+  return resolution;
+}
+
+/// "5.1" from Sonarr's audio channel count (6, or 5.1).
+String _formatAudioChannels(num channels) {
+  if (channels >= 7) return '7.1';
+  if (channels >= 5) return '5.1';
+  if (channels >= 2) return '2.0';
+  return channels == channels.roundToDouble()
+      ? '${channels.round()}'
+      : '$channels';
+}
+
+/// "1080p · x264 · EAC3 5.1" from the episode file's media info.
+String? _mediaLine(Map<String, dynamic> info) {
+  String? text(String key) {
+    final Object? value = info[key];
+    return value is String && value.trim().isNotEmpty ? value.trim() : null;
+  }
+
+  final String? resolution = text('resolution');
+  final String? videoCodec = text('videoCodec');
+  final String? audioCodec = text('audioCodec');
+  final Object? channels = info['audioChannels'];
+  final String audio = <String>[
+    if (audioCodec != null) audioCodec,
+    if (channels is num && channels > 0) _formatAudioChannels(channels),
+  ].join(' ');
+  final List<String> parts = <String>[
+    if (resolution != null) _formatResolution(resolution),
+    if (videoCodec != null) videoCodec,
+    if (audio.isNotEmpty) audio,
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// What the episode subtitles sheet needs to know about [episode].
+EpisodeSubtitlesInfo _episodeSubtitlesInfo(SonarrEpisode episode) {
+  final Map<String, dynamic>? info = _mediaInfo(episode);
+  final Object? fps = info?['videoFps'];
+  return EpisodeSubtitlesInfo(
+    episodeId: episode.id,
+    season: episode.seasonNumber,
+    episode: episode.episodeNumber,
+    title: episode.title,
+    mediaLine: info == null ? null : _mediaLine(info),
+    audioLanguages: _mediaInfoString(episode, 'audioLanguages'),
+    videoFps: fps is num && fps > 0 ? fps.toDouble() : null,
   );
 }
 
@@ -2105,15 +2387,23 @@ class _OverflowMenu extends ConsumerWidget {
     required this.series,
     required this.onRefreshed,
     required this.iconColor,
+    required this.subtitles,
+    required this.subtitlesRef,
   });
 
   final Instance instance;
   final SonarrSeries series;
   final VoidCallback onRefreshed;
   final Color iconColor;
+  final SeriesSubtitles subtitles;
+  final SeriesSubtitlesRef subtitlesRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final SeriesSubtitles subtitles = this.subtitles;
+    // Still loading counts as nothing missing.
+    final int subtitleGaps =
+        subtitles is SeriesSubtitlesReady ? subtitles.seriesGaps : 0;
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_vert, color: iconColor),
       onSelected: (String value) => _handleAction(context, ref, value),
@@ -2150,6 +2440,23 @@ class _OverflowMenu extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
           ),
         ),
+        if (subtitles is! SeriesSubtitlesOff)
+          PopupMenuItem<String>(
+            value: 'search_missing_subtitles',
+            enabled: subtitleGaps > 0,
+            child: ListTile(
+              leading: const Icon(Icons.closed_caption_outlined),
+              title: const Text('Search missing subtitles'),
+              subtitle: Text(
+                subtitleGaps > 0
+                    ? '$subtitleGaps episode${subtitleGaps == 1 ? '' : 's'} '
+                        'missing a language'
+                    : 'Nothing missing',
+              ),
+              enabled: subtitleGaps > 0,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
         const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'delete',
@@ -2206,6 +2513,13 @@ class _OverflowMenu extends ConsumerWidget {
             series: series,
           ),
         );
+
+      case 'search_missing_subtitles':
+        ref.read(subtitlesBridgeProvider).searchSeriesMissing(
+              context,
+              sonarr: instance,
+              series: subtitlesRef,
+            );
 
       case 'delete':
         _confirmDelete(context, ref);
@@ -2623,12 +2937,16 @@ class _AppBarActions extends StatefulWidget {
   final Instance instance;
   final SonarrSeries series;
   final VoidCallback onRefreshed;
+  final SeriesSubtitles subtitles;
+  final SeriesSubtitlesRef subtitlesRef;
 
   const _AppBarActions({
     required this.controller,
     required this.instance,
     required this.series,
     required this.onRefreshed,
+    required this.subtitles,
+    required this.subtitlesRef,
   });
 
   @override
@@ -2694,6 +3012,8 @@ class _AppBarActionsState extends State<_AppBarActions> {
           series: widget.series,
           onRefreshed: widget.onRefreshed,
           iconColor: iconColor,
+          subtitles: widget.subtitles,
+          subtitlesRef: widget.subtitlesRef,
         ),
       ),
     );
