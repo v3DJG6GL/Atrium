@@ -89,10 +89,10 @@ export const servicesData = {
     ],
     description: 'The companion subtitle manager for Sonarr and Radarr. Ensure every series and movie has perfectly synced audio and subtitle files.',
     features: [
-      'Inspect Wanted Subtitle Queues',
-      'Trigger Manual Subtitle Searches & Syncing',
-      'Review Language & Audio Profiles',
-      'Provider Statistics & Custom Adjustments'
+      'Subtitles Right on Radarr & Sonarr Pages',
+      'Manual Searches, Uploads & Timing Fixes',
+      'Sync, Translate & Clean Up Subtitles',
+      'Coverage Grid per Season & Language'
     ]
   },
   seerr: {

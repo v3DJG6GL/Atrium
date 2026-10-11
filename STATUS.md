@@ -85,7 +85,13 @@ Atrium is a **controller** app. Video playback was removed by design
   across indexers with grab-to-client, history, full settings menu,
   system
 - **Bazarr**: series/movies with per-episode subtitle status, manual
-  provider search/download/delete, wanted, history, blacklist, system
+  provider search/download/delete, wanted, history, blacklist, system.
+  A Bazarr links to its Radarr and Sonarr (detected from its settings, or
+  picked under Connected apps on its edit form); linked Radarr movie pages
+  and Sonarr series pages then show subtitles: per-language search, manual
+  search with result details, upload, sync, timing, translate, clean-up,
+  extract, delete, language profile, a season-by-language coverage grid
+  and an episode subtitles sheet
 - **Seerr** (Jellyseerr / Overseerr): discover (trending/upcoming/genres),
   search, item detail with request submission (profile/folder/server
   selection), requests management (approve/decline/delete/retry)

@@ -1,7 +1,8 @@
 # Bazarr subtitles in Radarr and Sonarr: porting plan
 
-> Status: step 1 (linking and foundation) built on `feat/bazarr-links`
-> (2026-10-12); steps 2 and 3 follow on stacked branches. Source of the design: the
+> Status: step 1 (linking and foundation) built on `feat/bazarr-links`,
+> step 2 (subtitles on the Radarr and Sonarr pages) on
+> `feat/bazarr-arr-subtitles` (2026-10-12); step 3 follows. Source of the design: the
 > Dashboarr work tracked in RenzoBeux/Dashboarr#478 (PRs #468, #479-#483),
 > integrated on `v3DJG6GL/Dashboarr:integration/bazarr-subtitles` (d7d880e).
 > This document keeps Dashboarr's decisions and states where Atrium has to
