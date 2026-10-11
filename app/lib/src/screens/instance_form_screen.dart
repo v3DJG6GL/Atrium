@@ -151,7 +151,24 @@ class _InstanceFormScreenState extends ConsumerState<InstanceFormScreen> {
         allowSelfSignedCerts: _allowSelfSigned,
         pollingIntervalSeconds: int.tryParse(_pollingInterval.text.trim()) ?? 5,
         customHeaders: _customHeaders,
+        links: _savedLinks(),
       );
+
+  /// Not edited by the form either: a Bazarr's links are written by its
+  /// Connected apps section the moment they are picked. Read from the saved
+  /// instance at save time, so saving the form never undoes a pick made
+  /// while it was open. Switching the service kind drops them.
+  Map<String, String> _savedLinks() {
+    final String? id = widget.instanceId;
+    if (id == null) {
+      return const <String, String>{};
+    }
+    final Instance? saved = ref.read(instanceByIdProvider(id));
+    if (saved == null || saved.kind != _kind) {
+      return const <String, String>{};
+    }
+    return saved.links;
+  }
 
   void _clearConnectionTest(String _) {
     setState(() {
