@@ -4,6 +4,7 @@ import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:service_bazarr/service_bazarr.dart';
 import 'package:service_plex/service_plex.dart';
 import 'package:service_speedtest_tracker/service_speedtest_tracker.dart';
 
@@ -562,6 +563,12 @@ class _InstanceFormScreenState extends ConsumerState<InstanceFormScreen> {
                   return null;
                 },
               ),
+            ],
+            // Links are picked against the saved Bazarr, so the section
+            // shows only when editing one.
+            if (_isEdit && _kind == ServiceKind.bazarr) ...<Widget>[
+              const SizedBox(height: Insets.lg),
+              BazarrConnectedAppsSection(bazarrId: widget.instanceId!),
             ],
             const SizedBox(height: Insets.xl),
             FilledButton.icon(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:service_bazarr/service_bazarr.dart';
 
 /// A Bazarr's links to Radarr and Sonarr are written by its Connected apps
 /// section as soon as they're picked, not by the form's Save. Saving the
@@ -53,6 +54,10 @@ void main() {
         overrides: <Override>[
           profileListProvider.overrideWith(() => profiles),
           activeProfileIdProvider.overrideWith(_Active.new),
+          bazarrLinkDetectionProvider.overrideWith(
+            (Ref ref, BazarrDetectionKey key) async =>
+                const ArrLinkDetection(),
+          ),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -76,6 +81,19 @@ void main() {
     await save(tester);
 
     expect(profiles.saved.single.links, bazarr.links);
+  });
+
+  testWidgets('a saved Bazarr shows its Connected apps',
+      (WidgetTester tester) async {
+    await editBazarr(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Connected apps'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Connected apps'), findsOneWidget);
   });
 
   testWidgets('saving keeps a link picked after the form opened',
