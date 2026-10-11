@@ -16,6 +16,7 @@ export 'src/subtitles/bazarr_activity.dart';
 export 'src/subtitles/bazarr_subtitle_mapping.dart';
 export 'src/subtitles/bazarr_subtitle_params.dart';
 export 'src/subtitles/bazarr_subtitle_providers.dart';
+export 'src/subtitles/bazarr_subtitles_bridge.dart';
 export 'src/subtitles/bazarr_version.dart';
 export 'src/subtitles/job_watch.dart';
 export 'src/subtitles/subtitle_actions.dart';
