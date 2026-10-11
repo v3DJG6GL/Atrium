@@ -25,6 +25,7 @@ class MovieSubtitlesRef {
     this.audioLanguages,
     this.videoFps,
     this.originalLanguage,
+    this.expanded = false,
   });
 
   /// The Radarr movie id.
@@ -40,6 +41,10 @@ class MovieSubtitlesRef {
   /// Radarr's `originalLanguage.name`.
   final String? originalLanguage;
 
+  /// Open the section expanded, e.g. when the page was reached from
+  /// Bazarr to work on this movie's subtitles.
+  final bool expanded;
+
   @override
   bool operator ==(Object other) =>
       other is MovieSubtitlesRef &&
@@ -47,7 +52,8 @@ class MovieSubtitlesRef {
       other.title == title &&
       other.audioLanguages == audioLanguages &&
       other.videoFps == videoFps &&
-      other.originalLanguage == originalLanguage;
+      other.originalLanguage == originalLanguage &&
+      other.expanded == expanded;
 
   @override
   int get hashCode => Object.hash(
@@ -56,6 +62,7 @@ class MovieSubtitlesRef {
         audioLanguages,
         videoFps,
         originalLanguage,
+        expanded,
       );
 }
 

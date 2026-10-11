@@ -33,7 +33,11 @@ final class BazarrSubtitlesBridge extends SubtitlesBridge {
       _ServedByBazarr(
         arr: radarr,
         builder: (Instance bazarr) =>
-            BazarrMovieSubtitlesCard(bazarr: bazarr, movie: movie),
+            BazarrMovieSubtitlesCard(
+          bazarr: bazarr,
+          movie: movie,
+          expanded: movie.expanded,
+        ),
       );
 
   @override
