@@ -7,6 +7,7 @@ library;
 
 export 'src/bazarr_api.dart';
 export 'src/bazarr_home.dart';
+export 'src/bazarr_open.dart';
 export 'src/bazarr_providers.dart';
 export 'src/link/bazarr_connected_apps_section.dart';
 export 'src/link/bazarr_link.dart';
