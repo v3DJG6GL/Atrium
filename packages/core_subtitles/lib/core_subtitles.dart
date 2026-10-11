@@ -2,6 +2,8 @@
 /// between Radarr/Sonarr screens and a linked Bazarr.
 library;
 
+export 'src/bridge/subtitles_bridge.dart';
+export 'src/bridge/subtitles_providers.dart';
 export 'src/coverage_model.dart';
 export 'src/elapsed.dart';
 export 'src/language_codes.dart';
