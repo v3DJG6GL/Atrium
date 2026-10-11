@@ -25,6 +25,7 @@ workspace:
   - packages/core_profile
   - packages/core_ui
   - packages/core_router
+  - packages/core_subtitles
   - services/service_sonarr
   - services/service_radarr
   - services/service_prowlarr

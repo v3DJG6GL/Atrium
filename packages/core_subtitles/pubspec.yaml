@@ -1,0 +1,23 @@
+name: core_subtitles
+description: >
+  Subtitle and language models, shared subtitle widgets, and the bridge
+  that lets Radarr and Sonarr screens show subtitles from a linked Bazarr
+  without depending on the Bazarr package.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.6.0
+  flutter: ^3.27.0
+
+dependencies:
+  core_models:
+  core_ui:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.3.2
+  meta: ^1.16.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
