@@ -41,11 +41,47 @@ abstract class RadarrMovie with _$RadarrMovie {
     double? popularity,
     @Default(<int>[]) List<int> tags,
     RadarrMovieStatistics? statistics,
+
+    /// The movie's file, with its media info. Read-only: never sent back to
+    /// Radarr.
+    @JsonKey(includeToJson: false) RadarrMovieFile? movieFile,
   }) = _RadarrMovie;
 
   factory RadarrMovie.fromJson(Map<String, dynamic> json) =>
       _$RadarrMovieFromJson(json);
 }
+
+/// A movie's file, as `GET movie` and `GET movie/{id}` embed it.
+@freezed
+abstract class RadarrMovieFile with _$RadarrMovieFile {
+  const factory RadarrMovieFile({
+    @Default(0) int id,
+    String? relativePath,
+    @Default(0) int size,
+    RadarrMediaInfo? mediaInfo,
+  }) = _RadarrMovieFile;
+
+  factory RadarrMovieFile.fromJson(Map<String, dynamic> json) =>
+      _$RadarrMovieFileFromJson(json);
+}
+
+/// The parts of a file's media info the subtitles section reads.
+@freezed
+abstract class RadarrMediaInfo with _$RadarrMediaInfo {
+  const factory RadarrMediaInfo({
+    /// Slash-joined audio languages ("English/German").
+    String? audioLanguages,
+    @JsonKey(fromJson: _toDouble) double? videoFps,
+
+    /// Slash-joined embedded subtitle languages.
+    String? subtitles,
+  }) = _RadarrMediaInfo;
+
+  factory RadarrMediaInfo.fromJson(Map<String, dynamic> json) =>
+      _$RadarrMediaInfoFromJson(json);
+}
+
+double? _toDouble(Object? value) => (value as num?)?.toDouble();
 
 @freezed
 abstract class RadarrMovieStatistics with _$RadarrMovieStatistics {
