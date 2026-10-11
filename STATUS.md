@@ -84,8 +84,13 @@ Atrium is a **controller** app. Video playback was removed by design
 - **Prowlarr**: indexers (add/edit/test from schema), manual search
   across indexers with grab-to-client, history, full settings menu,
   system
-- **Bazarr**: series/movies with per-episode subtitle status, manual
-  provider search/download/delete, wanted, history, blacklist, system.
+- **Bazarr**: tabs Library, History, Blacklist, System, Settings. The
+  Library holds movies and series (list or poster view, accent-insensitive
+  search, per-language coverage bars that filter, Missing / Complete / No
+  profile, per-row search and a confirmed Search all missing); rows open
+  the linked Radarr or Sonarr page, else Bazarr's own page. History pages
+  movie and episode history together, grouped by day, with entry details
+  and Blacklist and search again.
   A Bazarr links to its Radarr and Sonarr (detected from its settings, or
   picked under Connected apps on its edit form); linked Radarr movie pages
   and Sonarr series pages then show subtitles: per-language search, manual
