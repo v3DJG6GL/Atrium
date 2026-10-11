@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:service_bazarr/service_bazarr.dart';
 
+import 'arr_targets.dart';
 import 'connection_cache_store.dart';
 import 'preferences.dart';
 
@@ -43,5 +44,7 @@ Future<List<Override>> bootstrap() async {
     // Radarr and Sonarr pages show subtitles from a linked Bazarr through
     // this bridge; the packages themselves can't import service_bazarr.
     subtitlesBridgeProvider.overrideWithValue(const BazarrSubtitlesBridge()),
+    // Bazarr's Library and History open Radarr and Sonarr pages through this.
+    bazarrArrTargetsProvider.overrideWithValue(const AppArrTargets()),
   ];
 }
