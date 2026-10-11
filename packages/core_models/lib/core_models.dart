@@ -7,6 +7,7 @@ library;
 export 'src/health.dart';
 export 'src/instance.dart';
 export 'src/instance_auth.dart';
+export 'src/library_search.dart';
 export 'src/profile.dart';
 export 'src/service_kind.dart';
 export 'src/url_mode.dart';
