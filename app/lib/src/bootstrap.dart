@@ -2,8 +2,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:core_networking/core_networking.dart';
 import 'package:core_profile/core_profile.dart';
 import 'package:core_storage/core_storage.dart';
+import 'package:core_subtitles/core_subtitles.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:service_bazarr/service_bazarr.dart';
 
 import 'connection_cache_store.dart';
 import 'preferences.dart';
@@ -38,5 +40,8 @@ Future<List<Override>> bootstrap() async {
     settingsBoxProvider.overrideWithValue(settingsBox),
     profileRepositoryProvider.overrideWithValue(repo),
     connectionResolverProvider.overrideWithValue(resolver),
+    // Radarr and Sonarr pages show subtitles from a linked Bazarr through
+    // this bridge; the packages themselves can't import service_bazarr.
+    subtitlesBridgeProvider.overrideWithValue(const BazarrSubtitlesBridge()),
   ];
 }
