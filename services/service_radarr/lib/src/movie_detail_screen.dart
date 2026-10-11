@@ -15,12 +15,16 @@ class MovieDetailScreen extends ConsumerWidget {
     required this.instance,
     required this.movieId,
     this.movie,
+    this.expandSubtitles = false,
     super.key,
   });
 
   final Instance instance;
   final int movieId;
   final RadarrMovie? movie;
+
+  /// Open the subtitles section expanded, e.g. when reached from Bazarr.
+  final bool expandSubtitles;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,6 +38,7 @@ class MovieDetailScreen extends ConsumerWidget {
         body: _MovieDetailBody(
           instance: instance,
           movie: activeMovie,
+          expandSubtitles: expandSubtitles,
         ),
       );
     }
@@ -43,6 +48,7 @@ class MovieDetailScreen extends ConsumerWidget {
         data: (movie) => _MovieDetailBody(
           instance: instance,
           movie: movie,
+          expandSubtitles: expandSubtitles,
         ),
         loading: () => const Center(child: ExpressiveProgressIndicator()),
         error: (error, stack) => Scaffold(
@@ -63,10 +69,12 @@ class _MovieDetailBody extends ConsumerStatefulWidget {
   const _MovieDetailBody({
     required this.instance,
     required this.movie,
+    required this.expandSubtitles,
   });
 
   final Instance instance;
   final RadarrMovie movie;
+  final bool expandSubtitles;
 
   @override
   ConsumerState<_MovieDetailBody> createState() => _MovieDetailBodyState();
@@ -377,6 +385,7 @@ class _MovieDetailBodyState extends ConsumerState<_MovieDetailBody> {
                               widget.movie.movieFile?.mediaInfo?.audioLanguages,
                           videoFps: widget.movie.movieFile?.mediaInfo?.videoFps,
                           originalLanguage: widget.movie.originalLanguage?.name,
+                          expanded: widget.expandSubtitles,
                         ),
                       ),
                 const SizedBox(height: Insets.lg),

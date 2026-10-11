@@ -56,6 +56,7 @@ void main() {
     WidgetTester tester,
     RadarrMovie movie, {
     SubtitlesBridge? bridge,
+    bool expandSubtitles = false,
   }) async {
     tester.view.physicalSize = const Size(1080, 6000);
     tester.view.devicePixelRatio = 1;
@@ -72,6 +73,7 @@ void main() {
             instance: instance,
             movieId: movie.id,
             movie: movie,
+            expandSubtitles: expandSubtitles,
           ),
         ),
       ),
@@ -160,6 +162,15 @@ void main() {
           originalLanguage: 'English',
         ),
       );
+    });
+
+    testWidgets('opens the section expanded when asked to', (tester) async {
+      final bridge = _FakeBridge();
+      await pump(tester, movieWithFile, bridge: bridge, expandSubtitles: true);
+
+      expect(bridge.movies, isNotEmpty);
+      expect(bridge.movies.last.expanded, isTrue);
+      expect(bridge.movies.last.radarrId, 10);
     });
 
     testWidgets('skips the section when the movie has no file', (tester) async {

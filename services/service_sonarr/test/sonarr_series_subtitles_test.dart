@@ -65,6 +65,23 @@ class _FakeBridge extends SubtitlesBridge {
   void refresh(Instance arr, int itemId) => refreshes.add(itemId);
 }
 
+/// A [_FakeBridge] whose series data can change while the page is open.
+class _LiveBridge extends _FakeBridge {
+  _LiveBridge(this.live) : super(live.value);
+
+  final ValueNotifier<SeriesSubtitles> live;
+  late final Provider<SeriesSubtitles> _live = Provider<SeriesSubtitles>((ref) {
+    void changed() => ref.invalidateSelf();
+    live.addListener(changed);
+    ref.onDispose(() => live.removeListener(changed));
+    return live.value;
+  });
+
+  @override
+  ProviderListenable<SeriesSubtitles> series(Instance sonarr, int seriesId) =>
+      _live;
+}
+
 const _instance = Instance(
   id: 'sonarr-1',
   name: 'Sonarr Test',
@@ -165,7 +182,11 @@ const _ready = SeriesSubtitlesReady(
   seriesGaps: 3,
 );
 
-Future<void> _pump(WidgetTester tester, {SubtitlesBridge? bridge}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  SubtitlesBridge? bridge,
+  int? openEpisodeSubtitles,
+}) async {
   tester.view.physicalSize = const Size(1080, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -183,8 +204,12 @@ Future<void> _pump(WidgetTester tester, {SubtitlesBridge? bridge}) async {
             .overrideWith((ref) async => <SonarrQueueItem>[]),
         if (bridge != null) subtitlesBridgeProvider.overrideWithValue(bridge),
       ],
-      child: const MaterialApp(
-        home: SeriesDetailScreen(instance: _instance, series: _series),
+      child: MaterialApp(
+        home: SeriesDetailScreen(
+          instance: _instance,
+          series: _series,
+          openEpisodeSubtitles: openEpisodeSubtitles,
+        ),
       ),
     ),
   );
@@ -404,6 +429,48 @@ void main() {
 
       await _openEpisodeSheet(tester, 'Pilot');
       expect(find.text('Subtitles'), findsNothing);
+    });
+  });
+
+  group('openEpisodeSubtitles', () {
+    testWidgets('opens the episode sheet once the data lists the episode',
+        (tester) async {
+      final bridge = _FakeBridge(_ready);
+      await _pump(tester, bridge: bridge, openEpisodeSubtitles: 102);
+
+      expect(bridge.openedEpisodes, [102]);
+    });
+
+    testWidgets('does nothing when no Bazarr serves the Sonarr',
+        (tester) async {
+      final bridge = _FakeBridge(const SeriesSubtitlesOff());
+      await _pump(tester, bridge: bridge, openEpisodeSubtitles: 102);
+
+      expect(bridge.openedEpisodes, isEmpty);
+    });
+
+    testWidgets('waits for the data, then opens only once across rebuilds',
+        (tester) async {
+      final live =
+          ValueNotifier<SeriesSubtitles>(const SeriesSubtitlesPending());
+      addTearDown(live.dispose);
+      final bridge = _LiveBridge(live);
+      await _pump(tester, bridge: bridge, openEpisodeSubtitles: 201);
+      expect(bridge.openedEpisodes, isEmpty);
+
+      live.value = _ready;
+      await tester.pumpAndSettle();
+      expect(bridge.openedEpisodes, [201]);
+
+      // Fresher data rebuilds the page; the sheet doesn't open again.
+      live.value = const SeriesSubtitlesReady(
+        episodes: {101: _tags, 102: _tags, 201: _tags},
+        gapsBySeason: {1: 1, 2: 1},
+        seriesGaps: 2,
+      );
+      await tester.pumpAndSettle();
+      await _expandSeason1(tester);
+      expect(bridge.openedEpisodes, [201]);
     });
   });
 }

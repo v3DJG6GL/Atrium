@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:core_models/core_models.dart';
 import 'package:core_subtitles/core_subtitles.dart';
@@ -20,11 +22,16 @@ class SeriesDetailScreen extends ConsumerWidget {
   const SeriesDetailScreen({
     required this.instance,
     required this.series,
+    this.openEpisodeSubtitles,
     super.key,
   });
 
   final Instance instance;
   final SonarrSeries series;
+
+  /// A Sonarr episode id whose subtitles sheet opens once Bazarr's data for
+  /// the series lists it, e.g. when the page was reached from Bazarr.
+  final int? openEpisodeSubtitles;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,6 +47,7 @@ class SeriesDetailScreen extends ConsumerWidget {
         instance: instance,
         series: activeSeries,
         episodesAsync: episodesAsync,
+        openEpisodeSubtitles: openEpisodeSubtitles,
       ),
     );
   }
@@ -54,11 +62,13 @@ class _SeriesDetailBody extends ConsumerStatefulWidget {
     required this.instance,
     required this.series,
     required this.episodesAsync,
+    required this.openEpisodeSubtitles,
   });
 
   final Instance instance;
   final SonarrSeries series;
   final AsyncValue<List<SonarrEpisode>> episodesAsync;
+  final int? openEpisodeSubtitles;
 
   @override
   ConsumerState<_SeriesDetailBody> createState() => _SeriesDetailBodyState();
@@ -71,10 +81,45 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _showBackToTop = ValueNotifier<bool>(false);
 
+  /// Whether [_SeriesDetailBody.openEpisodeSubtitles] was handled; it opens
+  /// at most once per page.
+  bool _openedEpisodeSubtitles = false;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_scrollListener);
+  }
+
+  /// Opens the requested episode's subtitles sheet once Bazarr lists the
+  /// episode and Sonarr's episodes have settled (so the sheet gets the
+  /// file's details). Without a Bazarr ([SeriesSubtitlesOff]) it never opens.
+  void _maybeOpenEpisodeSubtitles(
+    SubtitlesBridge bridge,
+    SeriesSubtitles subs,
+    SeriesSubtitlesRef subsRef,
+  ) {
+    final int? episodeId = widget.openEpisodeSubtitles;
+    if (episodeId == null || _openedEpisodeSubtitles) return;
+    if (subs is! SeriesSubtitlesReady ||
+        !subs.episodes.containsKey(episodeId)) {
+      return;
+    }
+    if (widget.episodesAsync.isLoading && !widget.episodesAsync.hasValue) {
+      return;
+    }
+    _openedEpisodeSubtitles = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        bridge.openEpisode(
+          context,
+          sonarr: widget.instance,
+          series: subsRef,
+          episodeId: episodeId,
+        ),
+      );
+    });
   }
 
   void _scrollListener() {
@@ -158,6 +203,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
         return e == null ? null : _episodeSubtitlesInfo(e);
       },
     );
+    _maybeOpenEpisodeSubtitles(bridge, subs, subsRef);
 
     final SonarrImage? poster = widget.series.images
         .firstWhereOrNull((SonarrImage i) => i.coverType == 'poster');
