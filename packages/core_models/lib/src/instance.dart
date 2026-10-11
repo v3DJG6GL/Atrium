@@ -57,7 +57,17 @@ abstract class Instance with _$Instance {
     /// over the profile's global headers (instance wins on key collision).
     /// Values live in the profile JSON like URLs do; they are not secrets.
     @Default(<String, String>{}) Map<String, String> customHeaders,
+
+    /// Other instances this one works with, keyed by the other side's
+    /// [ServiceKind] name (e.g. `radarr`). A value is that instance's [id],
+    /// or [linkNone] when the user turned the link off. A missing key means
+    /// "automatic": the app works the link out itself where it can. Only a
+    /// Bazarr uses this today, to know which Radarr and Sonarr it serves.
+    @Default(<String, String>{}) Map<String, String> links,
   }) = _Instance;
+
+  /// The [links] value for a link the user turned off.
+  static const String linkNone = 'none';
 
   factory Instance.fromJson(Map<String, dynamic> json) =>
       _$InstanceFromJson(json);
@@ -75,7 +85,8 @@ abstract class Instance with _$Instance {
       'auth: $auth, '
       'allowSelfSignedCerts: $allowSelfSignedCerts, '
       'pollingIntervalSeconds: $pollingIntervalSeconds, '
-      'customHeaderNames: ${customHeaders.keys.toList(growable: false)}'
+      'customHeaderNames: ${customHeaders.keys.toList(growable: false)}, '
+      'links: $links'
       ')';
 }
 

@@ -83,6 +83,41 @@ void main() {
     expect(instance.customHeaders, const <String, String>{});
   });
 
+  test('Instance.fromJson without links falls back to empty', () {
+    final Instance instance = Instance.fromJson(<String, dynamic>{
+      'id': 'i1',
+      'name': 'Bazarr',
+      'kind': 'bazarr',
+      'localUrl': 'http://192.168.1.10:6767',
+      'externalUrl': '',
+      'urlMode': 'auto',
+      'auth': <String, dynamic>{'apiKey': '', 'runtimeType': 'apiKey'},
+    });
+
+    expect(instance.links, const <String, String>{});
+  });
+
+  test('Instance links round-trip through JSON', () {
+    const Instance instance = Instance(
+      id: 'b1',
+      name: 'Bazarr',
+      kind: ServiceKind.bazarr,
+      localUrl: 'http://192.168.1.10:6767',
+      externalUrl: '',
+      urlMode: UrlMode.auto,
+      auth: InstanceAuth.apiKey(apiKey: 'secret-key'),
+      links: <String, String>{'radarr': 'r1', 'sonarr': Instance.linkNone},
+    );
+
+    final Instance decoded = Instance.fromJson(
+      jsonDecode(jsonEncode(instance.toJson())) as Map<String, dynamic>,
+    );
+
+    expect(decoded.links, instance.links);
+    expect(instance.toString(), contains('links: {radarr: r1, sonarr: none}'));
+    expect(instance.toString(), isNot(contains('secret-key')));
+  });
+
   test('Speedtest Tracker instance round-trips by stable enum name', () {
     const Instance instance = Instance(
       id: 'speedtest-1',
