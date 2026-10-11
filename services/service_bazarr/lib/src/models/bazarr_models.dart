@@ -71,9 +71,10 @@ abstract class BazarrWantedMovie with _$BazarrWantedMovie {
       _$BazarrWantedMovieFromJson(json);
 }
 
-/// One subtitle entry, used for both present subtitles (carry a [path]) and
-/// missing ones (no path). Bazarr returns these as objects with snake_case
-/// language codes.
+/// One subtitle entry, used for both present subtitles and missing ones.
+/// Among present subtitles an external file carries a [path], an embedded
+/// track (inside the video file) has none. Bazarr returns these as objects
+/// with snake_case language codes.
 @freezed
 abstract class BazarrSubtitle with _$BazarrSubtitle {
   const factory BazarrSubtitle({
@@ -83,6 +84,13 @@ abstract class BazarrSubtitle with _$BazarrSubtitle {
     @Default(false) bool hi,
     @Default(false) bool forced,
     String? path,
+
+    /// Bazarr's subtitle row id. Addresses an embedded track (no [path]) in
+    /// `PATCH /subtitles` as `subtitles_id`; null while Bazarr hasn't indexed
+    /// the track.
+    int? id,
+    @JsonKey(name: 'embedded_track_id') int? embeddedTrackId,
+    @JsonKey(name: 'file_size') int? fileSize,
   }) = _BazarrSubtitle;
 
   factory BazarrSubtitle.fromJson(Map<String, dynamic> json) =>
@@ -103,6 +111,11 @@ abstract class BazarrSeries with _$BazarrSeries {
     @Default(0) int episodeMissingCount,
     String? poster,
     String? seriesType,
+    @JsonKey(name: 'audio_language')
+    @Default(<BazarrLanguage>[])
+    List<BazarrLanguage> audioLanguage,
+    String? path,
+    bool? ended,
   }) = _BazarrSeries;
 
   factory BazarrSeries.fromJson(Map<String, dynamic> json) =>
@@ -124,6 +137,11 @@ abstract class BazarrMovie with _$BazarrMovie {
     @JsonKey(name: 'missing_subtitles')
     @Default(<BazarrSubtitle>[])
     List<BazarrSubtitle> missingSubtitles,
+    @JsonKey(name: 'audio_language')
+    @Default(<BazarrLanguage>[])
+    List<BazarrLanguage> audioLanguage,
+    String? path,
+    String? sceneName,
   }) = _BazarrMovie;
 
   factory BazarrMovie.fromJson(Map<String, dynamic> json) =>
@@ -145,6 +163,11 @@ abstract class BazarrEpisode with _$BazarrEpisode {
     @JsonKey(name: 'missing_subtitles')
     @Default(<BazarrSubtitle>[])
     List<BazarrSubtitle> missingSubtitles,
+    @JsonKey(name: 'audio_language')
+    @Default(<BazarrLanguage>[])
+    List<BazarrLanguage> audioLanguage,
+    String? path,
+    String? sceneName,
   }) = _BazarrEpisode;
 
   factory BazarrEpisode.fromJson(Map<String, dynamic> json) =>
@@ -159,7 +182,13 @@ abstract class BazarrSubtitleSearchResult with _$BazarrSubtitleSearchResult {
   const factory BazarrSubtitleSearchResult({
     @Default('') String language,
     @Default('') String provider,
-    @Default(0) int score,
+    @Default(0) num score,
+    @JsonKey(name: 'orig_score') num? origScore,
+    @JsonKey(name: 'score_without_hash') num? scoreWithoutHash,
+    @Default(<String>[]) List<String> matches,
+    @JsonKey(name: 'dont_matches')
+    @Default(<String>[])
+    List<String> dontMatches,
     @JsonKey(name: 'hearing_impaired') @Default('False') String hearingImpaired,
     @Default('False') String forced,
     @JsonKey(name: 'original_format') @Default('False') String originalFormat,
@@ -177,8 +206,9 @@ abstract class BazarrSubtitleSearchResult with _$BazarrSubtitleSearchResult {
 
 /// One entry from `GET /episodes/history` or `/movies/history`. [isMovie] is
 /// set by the client (not in the JSON) so the two can share a unified list.
-/// [action] is Bazarr's history action code (1 downloaded, 2 deleted,
-/// 3 upgraded, ...); [description] is the human-readable summary.
+/// [action] is Bazarr's history action code (0 deleted, 1 downloaded,
+/// 2 downloaded manually, 3 upgraded, 4 uploaded, 5 synced, 6 translated,
+/// 7 extracted); [description] is the human-readable summary.
 @freezed
 abstract class BazarrHistoryItem with _$BazarrHistoryItem {
   const factory BazarrHistoryItem({
@@ -194,6 +224,16 @@ abstract class BazarrHistoryItem with _$BazarrHistoryItem {
     @Default(0) int action,
     BazarrSubtitle? language,
     @Default(false) bool blacklisted,
+    @JsonKey(name: 'radarrId') int? radarrId,
+    @JsonKey(name: 'sonarrSeriesId') int? sonarrSeriesId,
+    @JsonKey(name: 'sonarrEpisodeId') int? sonarrEpisodeId,
+    @JsonKey(name: 'subs_id') String? subsId,
+    @JsonKey(name: 'subtitles_path') String? subtitlesPath,
+    @Default(<String>[]) List<String> matches,
+    @JsonKey(name: 'dont_matches')
+    @Default(<String>[])
+    List<String> dontMatches,
+    @Default(false) bool upgradable,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(false)
     bool isMovie,
@@ -316,6 +356,8 @@ abstract class BazarrLogEntry with _$BazarrLogEntry {
 
 /// One subtitle language from `GET /system/languages` (all ~187; [enabled]
 /// marks the active ones). [code2] is the value `languages-enabled` expects.
+/// Also the shape of an item's `audio_language` entries, which carry no
+/// `enabled` flag (it defaults to false).
 @freezed
 abstract class BazarrLanguage with _$BazarrLanguage {
   const factory BazarrLanguage({
@@ -336,7 +378,11 @@ abstract class BazarrLanguage with _$BazarrLanguage {
 
 /// One language entry inside a [BazarrLanguageProfile]. Bazarr stores the flags
 /// as "True"/"False" strings.
-@freezed
+///
+/// [toJson] is hand-written so an unknown `audio_only_include` is left out
+/// rather than sent as null (json_serializable's `includeIfNull: false` needs
+/// a newer language version than this package targets).
+@Freezed(toJson: false)
 abstract class BazarrProfileItem with _$BazarrProfileItem {
   const factory BazarrProfileItem({
     @Default(0) int id,
@@ -344,10 +390,26 @@ abstract class BazarrProfileItem with _$BazarrProfileItem {
     @Default('False') String hi,
     @Default('False') String forced,
     @JsonKey(name: 'audio_exclude') @Default('False') String audioExclude,
+
+    /// "True"/"False" on Bazarr versions that know the field; null (and left
+    /// out of [toJson], which `setProfiles` round-trips) on older ones.
+    @JsonKey(name: 'audio_only_include') String? audioOnlyInclude,
   }) = _BazarrProfileItem;
 
   factory BazarrProfileItem.fromJson(Map<String, dynamic> json) =>
       _$BazarrProfileItemFromJson(json);
+
+  const BazarrProfileItem._();
+
+  /// The shape Bazarr expects back in `languages-profiles`.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'language': language,
+        'hi': hi,
+        'forced': forced,
+        'audio_exclude': audioExclude,
+        if (audioOnlyInclude != null) 'audio_only_include': audioOnlyInclude,
+      };
 }
 
 /// A language profile from `GET /system/languages/profiles`. Saved (full list)
@@ -368,6 +430,31 @@ abstract class BazarrLanguageProfile with _$BazarrLanguageProfile {
 
   factory BazarrLanguageProfile.fromJson(Map<String, dynamic> json) =>
       _$BazarrLanguageProfileFromJson(json);
+}
+
+/// One background job from `GET /system/jobs` (Bazarr 1.5.6+).
+@freezed
+abstract class BazarrJob with _$BazarrJob {
+  const factory BazarrJob({
+    @JsonKey(name: 'job_id') @Default(0) int jobId,
+    @JsonKey(name: 'job_name') @Default('') String jobName,
+    @Default('') String status,
+    @JsonKey(name: 'progress_value') int? progressValue,
+    @JsonKey(name: 'progress_max') int? progressMax,
+    @JsonKey(name: 'progress_message') String? progressMessage,
+  }) = _BazarrJob;
+
+  factory BazarrJob.fromJson(Map<String, dynamic> json) =>
+      _$BazarrJobFromJson(json);
+}
+
+/// One page of `GET /movies/history` or `/episodes/history`: the entries and
+/// the stream's total length (for paging).
+class BazarrHistoryPage {
+  const BazarrHistoryPage({required this.items, required this.total});
+
+  final List<BazarrHistoryItem> items;
+  final int total;
 }
 
 /// A flattened "needs subtitles" row, unifying episodes + movies for the UI.

@@ -189,7 +189,10 @@ class _ResultCardState extends ConsumerState<_ResultCard> {
               spacing: Insets.sm,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
-                Text('Score ${r.score}', style: theme.textTheme.labelSmall),
+                Text(
+                  'Score ${r.score.round()}',
+                  style: theme.textTheme.labelSmall,
+                ),
                 if (hi) Text('HI', style: theme.textTheme.labelSmall),
                 if (forced) Text('Forced', style: theme.textTheme.labelSmall),
                 if (r.uploader != null && r.uploader!.isNotEmpty)
