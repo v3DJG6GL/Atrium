@@ -1,18 +1,23 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart';
-import 'package:core_networking/core_networking.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'bazarr_api.dart';
-import 'bazarr_providers.dart';
-import 'bazarr_search_screen.dart';
-import 'bazarr_subtitle_chips.dart';
 import 'models/bazarr_models.dart';
+import 'subtitles/bazarr_subtitle_mapping.dart';
+import 'subtitles/bazarr_subtitle_params.dart';
+import 'subtitles/bazarr_subtitle_providers.dart';
+import 'subtitles/manual_search/open_manual_search.dart';
+import 'subtitles/subtitle_actions.dart';
+import 'subtitles/ui/subtitle_flows.dart';
+import 'subtitles/ui/subtitles_block.dart';
 
-/// Per-movie subtitle view: present and missing subtitles, a manual-search
-/// action, and delete on downloaded subs. Provider-backed so it refreshes in
-/// place after a download or delete.
+/// Per-movie subtitle view: the movie's subtitles and missing languages with
+/// their actions (search, manual search, upload, sync, timing, translate,
+/// clean up, delete) and its language profile. Watches just this movie, so
+/// it refreshes in place after an action.
 class BazarrMovieDetailScreen extends ConsumerWidget {
   const BazarrMovieDetailScreen({
     required this.instance,
@@ -27,8 +32,9 @@ class BazarrMovieDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<BazarrMovie>> movies =
-        ref.watch(bazarrMoviesProvider(instance));
+    final BazarrItemKey key = (instance, radarrId);
+    final AsyncValue<BazarrMovie?> movie =
+        ref.watch(bazarrMovieItemProvider(key));
     return Scaffold(
       appBar: AppBar(
         title: Text(title, overflow: TextOverflow.ellipsis),
@@ -36,60 +42,71 @@ class BazarrMovieDetailScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Search subtitles',
             icon: const Icon(Icons.subtitles_outlined),
-            onPressed: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(
-                builder: (_) => BazarrSubtitleSearchScreen(
-                  instance: instance,
-                  isMovie: true,
-                  id: radarrId,
-                  seriesId: 0,
-                  title: title,
-                ),
+            onPressed: () => unawaited(
+              openBazarrManualSearch(
+                context,
+                bazarr: instance,
+                target: MovieTarget(radarrId),
+                title: title,
               ),
             ),
           ),
         ],
       ),
-      body: AsyncValueView<List<BazarrMovie>>(
-        value: movies,
-        onRetry: () => ref.invalidate(bazarrMoviesProvider(instance)),
-        data: (List<BazarrMovie> list) {
-          BazarrMovie? movie;
-          for (final BazarrMovie m in list) {
-            if (m.radarrId == radarrId) {
-              movie = m;
-              break;
-            }
-          }
-          if (movie == null) {
+      body: AsyncValueView<BazarrMovie?>(
+        value: movie,
+        onRetry: () => ref.invalidate(bazarrMovieItemProvider(key)),
+        data: (BazarrMovie? m) {
+          if (m == null) {
             return const EmptyView(
               icon: Icons.movie_outlined,
               title: 'Movie not found',
               message: 'It may have been removed from Bazarr.',
             );
           }
-          final BazarrMovie m = movie;
           return ListView(
             padding: Insets.page,
             children: <Widget>[
               _HeaderCard(movie: m),
               const SizedBox(height: Insets.md),
-              _SectionCard(
-                title: 'Subtitles',
-                child: m.subtitles.isEmpty
-                    ? const _MutedLine('None downloaded')
-                    : BazarrSubtitleChips(
-                        present: m.subtitles,
-                        onDeletePresent: (BazarrSubtitle s) =>
-                            _confirmDelete(context, ref, s),
+              Card(
+                margin: EdgeInsets.zero,
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        Insets.lg,
+                        Insets.lg,
+                        Insets.lg,
+                        Insets.sm,
                       ),
-              ),
-              const SizedBox(height: Insets.md),
-              _SectionCard(
-                title: 'Missing',
-                child: m.missingSubtitles.isEmpty
-                    ? const _MutedLine('Nothing missing')
-                    : BazarrSubtitleChips(missing: m.missingSubtitles),
+                      child: Text(
+                        'Subtitles',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    BazarrSubtitlesBlock(
+                      bazarr: instance,
+                      subject: SubtitleSubject(
+                        target: MovieTarget(radarrId),
+                        rows: m.subtitleRows(),
+                        title: m.title.isEmpty ? title : m.title,
+                        searchTitle: title,
+                        profileId: m.profileId,
+                        profileOwner: MovieProfileOwner(radarrId),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: Insets.xl),
             ],
@@ -97,63 +114,6 @@ class BazarrMovieDetailScreen extends ConsumerWidget {
         },
       ),
     );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    BazarrSubtitle s,
-  ) async {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    if (!(s.path?.isNotEmpty ?? false)) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'This subtitle is embedded in the video and cannot be removed here.',
-          ),
-        ),
-      );
-      return;
-    }
-    final bool? ok = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Delete subtitle?'),
-        content: Text(
-          'Remove the ${s.name.isNotEmpty ? s.name : s.code2.toUpperCase()} '
-          'subtitle for this movie?',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) {
-      return;
-    }
-    try {
-      final BazarrApi api = await ref.read(bazarrApiProvider(instance).future);
-      await api.deleteMovieSubtitle(radarrId: radarrId, subtitle: s);
-      ref.invalidate(bazarrMoviesProvider(instance));
-      ref.invalidate(bazarrWantedProvider(instance));
-      ref.invalidate(bazarrBadgesProvider(instance));
-      messenger.showSnackBar(const SnackBar(content: Text('Subtitle deleted')));
-    } on Object catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Delete failed: ${_err(e)}')),
-      );
-    }
   }
 }
 
@@ -241,39 +201,6 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-/// Tonal section card with a titleMedium w700 heading.
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(Insets.lg),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: Insets.sm),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
 /// Small tonal metadata pill (icon + label), tinted by [color].
 class _MetaPill extends StatelessWidget {
   const _MetaPill({
@@ -310,28 +237,4 @@ class _MetaPill extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A muted "nothing here" line for an empty section.
-class _MutedLine extends StatelessWidget {
-  const _MutedLine(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Text(
-      text,
-      style:
-          theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
-    );
-  }
-}
-
-String _err(Object e) {
-  if (e is NetworkException && e.message.isNotEmpty) {
-    return e.message;
-  }
-  return 'request failed';
 }
