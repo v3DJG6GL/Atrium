@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart';
 import 'package:core_networking/core_networking.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -195,12 +197,17 @@ DateTime? _parseHistoryTs(String s) {
   }
 }
 
-/// System status (versions, OS, database, uptime).
+/// System status (versions, OS, database, uptime). Also the source of the
+/// version gates (`bazarrVersionInfoProvider`), so it refreshes itself after
+/// an hour to pick up a Bazarr upgrade.
 final bazarrSystemStatusProvider =
     FutureProvider.family<BazarrSystemStatus, Instance>((
   Ref ref,
   Instance instance,
 ) async {
+  final Timer refreshTimer =
+      Timer(const Duration(hours: 1), ref.invalidateSelf);
+  ref.onDispose(refreshTimer.cancel);
   final BazarrApi api = await ref.watch(bazarrApiProvider(instance).future);
   return api.getSystemStatus();
 });
