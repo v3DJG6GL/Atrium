@@ -166,12 +166,33 @@ final radarrSearchActiveProvider = StateProvider.family<bool, Instance>(
   (ref, instance) => false,
 );
 
+LibraryMatchFields _radarrMatchFields(RadarrMovie m) => LibraryMatchFields.arr(
+      title: m.title,
+      sortTitle: m.sortTitle,
+      year: m.year,
+    );
+
+/// The movie library pre-normalized for search; null until it has loaded.
+/// Watched only while a search query is active, so most visits never build
+/// it.
+final radarrSearchIndexProvider = Provider.autoDispose
+    .family<LibraryIndex<RadarrMovie>?, Instance>((ref, instance) {
+  final List<RadarrMovie>? movies = ref.watch(
+    radarrMoviesProvider(instance)
+        .select((AsyncValue<List<RadarrMovie>> a) => a.value),
+  );
+  if (movies == null) return null;
+  return buildLibraryIndex(movies, _radarrMatchFields);
+});
+
 /// Dynamic filtered movies provider based on active search query, filters, and sorts.
 final radarrFilteredMoviesProvider = Provider.autoDispose
     .family<AsyncValue<List<RadarrMovie>>, Instance>((ref, instance) {
   final String query = ref.watch(radarrSearchQueryProvider(instance));
   final AsyncValue<List<RadarrMovie>> moviesAsync =
       ref.watch(radarrMoviesProvider(instance));
+  final LibraryIndex<RadarrMovie>? searchIndex =
+      query.isEmpty ? null : ref.watch(radarrSearchIndexProvider(instance));
 
   final RadarrMovieSortField sortField =
       ref.watch(radarrMovieSortFieldProvider(instance));
@@ -185,11 +206,12 @@ final radarrFilteredMoviesProvider = Provider.autoDispose
   return moviesAsync.whenData((List<RadarrMovie> list) {
     Iterable<RadarrMovie> filtered = list;
 
-    // 1. Filter by search query
+    // 1. Filter by search query (accents, punctuation and a trailing year
+    // handled by the shared library matcher; the list order is kept)
     if (query.isNotEmpty) {
-      final String lowercaseQuery = query.toLowerCase();
-      filtered = filtered.where(
-        (RadarrMovie m) => m.title.toLowerCase().contains(lowercaseQuery),
+      filtered = filterLibraryIndex(
+        searchIndex ?? buildLibraryIndex(list, _radarrMatchFields),
+        query,
       );
     }
 

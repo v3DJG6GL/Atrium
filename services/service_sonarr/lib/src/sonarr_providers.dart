@@ -180,12 +180,33 @@ final sonarrSearchActiveProvider = StateProvider.family<bool, Instance>(
   (ref, instance) => false,
 );
 
+LibraryMatchFields _sonarrMatchFields(SonarrSeries s) => LibraryMatchFields.arr(
+      title: s.title,
+      sortTitle: s.sortTitle,
+      year: s.year,
+    );
+
+/// The series library pre-normalized for search; null until it has loaded.
+/// Watched only while a search query is active, so most visits never build
+/// it.
+final sonarrSearchIndexProvider = Provider.autoDispose
+    .family<LibraryIndex<SonarrSeries>?, Instance>((ref, instance) {
+  final List<SonarrSeries>? series = ref.watch(
+    sonarrSeriesProvider(instance)
+        .select((AsyncValue<List<SonarrSeries>> a) => a.value),
+  );
+  if (series == null) return null;
+  return buildLibraryIndex(series, _sonarrMatchFields);
+});
+
 /// Dynamic filtered series provider based on active search query.
 final sonarrFilteredSeriesProvider = Provider.autoDispose
     .family<AsyncValue<List<SonarrSeries>>, Instance>((ref, instance) {
   final String query = ref.watch(sonarrSearchQueryProvider(instance));
   final AsyncValue<List<SonarrSeries>> seriesAsync =
       ref.watch(sonarrSeriesProvider(instance));
+  final LibraryIndex<SonarrSeries>? searchIndex =
+      query.isEmpty ? null : ref.watch(sonarrSearchIndexProvider(instance));
 
   final SonarrSeriesSortField sortField =
       ref.watch(sonarrSeriesSortFieldProvider(instance));
@@ -199,11 +220,12 @@ final sonarrFilteredSeriesProvider = Provider.autoDispose
   return seriesAsync.whenData((List<SonarrSeries> list) {
     Iterable<SonarrSeries> filtered = list;
 
-    // 1. Filter by search query
+    // 1. Filter by search query (accents, punctuation and a trailing year
+    // handled by the shared library matcher; the list order is kept)
     if (query.isNotEmpty) {
-      final String lowercaseQuery = query.toLowerCase();
-      filtered = filtered.where(
-        (SonarrSeries s) => s.title.toLowerCase().contains(lowercaseQuery),
+      filtered = filterLibraryIndex(
+        searchIndex ?? buildLibraryIndex(list, _sonarrMatchFields),
+        query,
       );
     }
 

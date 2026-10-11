@@ -25,6 +25,9 @@ class _MoviesTabState extends ConsumerState<MoviesTab>
   late final FocusNode _searchFocusNode;
   late final void Function() _resetSearchActive;
   double _lastBottomInset = 0;
+  Timer? _searchDebounce;
+
+  static const Duration _searchDebounceDelay = Duration(milliseconds: 200);
 
   @override
   void initState() {
@@ -42,6 +45,7 @@ class _MoviesTabState extends ConsumerState<MoviesTab>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _resetSearchActive();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
@@ -70,6 +74,23 @@ class _MoviesTabState extends ConsumerState<MoviesTab>
         _searchFocusNode.hasFocus || _searchController.text.isNotEmpty;
     ref.read(radarrSearchActiveProvider(widget.instance).notifier).state =
         isActive;
+  }
+
+  /// Applies the typed query after a short pause, so a fast typist doesn't
+  /// filter the whole library on every keystroke. Clearing applies at once.
+  void _setSearchQuery(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
+    if (value.isEmpty) {
+      ref.read(radarrSearchQueryProvider(widget.instance).notifier).state = '';
+      return;
+    }
+    _searchDebounce = Timer(_searchDebounceDelay, () {
+      _searchDebounce = null;
+      if (!mounted) return;
+      ref.read(radarrSearchQueryProvider(widget.instance).notifier).state =
+          value;
+    });
   }
 
   void _onFocusChange() {
@@ -113,6 +134,8 @@ class _MoviesTabState extends ConsumerState<MoviesTab>
 
     ref.listen<String>(radarrSearchQueryProvider(widget.instance),
         (String? previous, String next) {
+      // Cleared elsewhere (a back press): drop any query still waiting.
+      if (next.isEmpty) _searchDebounce?.cancel();
       if (next.isEmpty && _searchController.text.isNotEmpty) {
         setState(() {
           _searchController.clear();
@@ -264,25 +287,14 @@ class _MoviesTabState extends ConsumerState<MoviesTab>
                                     setState(() {
                                       _searchController.clear();
                                     });
-                                    ref
-                                        .read(
-                                          radarrSearchQueryProvider(
-                                            widget.instance,
-                                          ).notifier,
-                                        )
-                                        .state = '';
+                                    _setSearchQuery('');
                                     _updateSearchActiveState();
                                   },
                                 ),
                             ],
                             onChanged: (String value) {
                               setState(() {});
-                              ref
-                                  .read(
-                                    radarrSearchQueryProvider(widget.instance)
-                                        .notifier,
-                                  )
-                                  .state = value;
+                              _setSearchQuery(value);
                               _updateSearchActiveState();
                             },
                           ),
