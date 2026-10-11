@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:collection/collection.dart';
 import 'package:core_models/core_models.dart';
+import 'package:core_subtitles/core_subtitles.dart';
 import 'package:core_ui/core_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,6 +132,7 @@ class _MovieDetailBodyState extends ConsumerState<_MovieDetailBody> {
     ref.invalidate(radarrMovieByIdProvider((widget.instance, widget.movie.id)));
     ref.invalidate(radarrMoviesProvider(widget.instance));
     ref.invalidate(radarrQueueProvider(widget.instance));
+    ref.read(subtitlesBridgeProvider).refresh(widget.instance, widget.movie.id);
     if (widget.movie.collection?.tmdbId != null) {
       ref.invalidate(
         radarrCollectionByTmdbIdProvider(
@@ -364,6 +366,19 @@ class _MovieDetailBodyState extends ConsumerState<_MovieDetailBody> {
                 ],
                 const SizedBox(height: Insets.lg),
                 _FileSection(movie: widget.movie),
+                // Owns its top spacing: renders nothing without a Bazarr.
+                if (widget.movie.hasFile)
+                  ref.watch(subtitlesBridgeProvider).movieSection(
+                        radarr: widget.instance,
+                        movie: MovieSubtitlesRef(
+                          radarrId: widget.movie.id,
+                          title: widget.movie.title,
+                          audioLanguages:
+                              widget.movie.movieFile?.mediaInfo?.audioLanguages,
+                          videoFps: widget.movie.movieFile?.mediaInfo?.videoFps,
+                          originalLanguage: widget.movie.originalLanguage?.name,
+                        ),
+                      ),
                 const SizedBox(height: Insets.lg),
                 _ReleaseDatesSection(movie: widget.movie),
               ],
