@@ -225,43 +225,38 @@ void main() {
     expect(find.text('Bob'), findsOneWidget);
   });
 
-  testWidgets('BazarrHome renders wanted-subtitles rows',
-      (WidgetTester tester) async {
+  testWidgets('BazarrHome renders the library', (WidgetTester tester) async {
     final Instance instance = _instance(ServiceKind.bazarr);
     await _pump(
       tester,
       <Override>[
-        bazarrBadgesProvider(instance).overrideWith(
-          (Ref ref) async =>
-              const BazarrBadges(episodes: 3, movies: 1, providers: 5),
-        ),
-        bazarrWantedProvider(instance).overrideWith(
-          (Ref ref) async => const <BazarrWantedRow>[
-            BazarrWantedRow(
-              title: 'Breaking Bad',
-              subtitle: 'S01E01 · Pilot',
-              missing: <BazarrSubtitle>[
-                BazarrSubtitle(name: 'English', code2: 'en')
+        bazarrMoviesProvider(instance).overrideWith(
+          (Ref ref) async => const <BazarrMovie>[
+            BazarrMovie(
+              radarrId: 1,
+              title: 'The Matrix',
+              year: 1999,
+              profileId: 1,
+              missingSubtitles: <BazarrSubtitle>[
+                BazarrSubtitle(name: 'English', code2: 'en'),
               ],
-              isMovie: false,
             ),
           ],
         ),
         bazarrSeriesProvider(instance).overrideWith(
           (Ref ref) async => const <BazarrSeries>[],
         ),
-        bazarrMoviesProvider(instance).overrideWith(
-          (Ref ref) async => const <BazarrMovie>[],
+        bazarrProfilesProvider(instance).overrideWith(
+          (Ref ref) async => const <BazarrLanguageProfile>[],
         ),
       ],
       BazarrHome(instance: instance),
     );
-    // Wanted is the third tab now; switch to it before asserting.
-    await tester.tap(find.text('Wanted'));
-    await tester.pump(); // register the tap, start the tab animation
-    await tester.pump(const Duration(milliseconds: 400)); // finish animation
-    await tester.pump(); // let the wanted provider resolve and render
-    expect(find.text('Breaking Bad'), findsOneWidget);
+    await tester.pump();
+    await tester.pump();
+    // Library is the first tab, on Movies.
+    expect(find.text('The Matrix'), findsOneWidget);
+    expect(find.text('Missing 1'), findsOneWidget);
   });
 
   testWidgets('PlexHome renders hub sections', (WidgetTester tester) async {

@@ -41,7 +41,6 @@ class _BazarrLanguagesScreenState extends ConsumerState<BazarrLanguagesScreen> {
           await ref.read(bazarrApiProvider(widget.instance).future);
       await api.setEnabledLanguages(_enabled.toList());
       ref.invalidate(bazarrLanguagesProvider(widget.instance));
-      ref.invalidate(bazarrWantedProvider(widget.instance));
       ref.invalidate(bazarrBadgesProvider(widget.instance));
       messenger.showSnackBar(
         const SnackBar(content: Text('Languages saved')),

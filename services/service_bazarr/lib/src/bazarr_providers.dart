@@ -23,36 +23,6 @@ final bazarrBadgesProvider = FutureProvider.family<BazarrBadges, Instance>((
   return api.getBadges();
 });
 
-/// The unified "wanted subtitles" list (episodes + movies) for an instance.
-final bazarrWantedProvider =
-    FutureProvider.family<List<BazarrWantedRow>, Instance>((
-  Ref ref,
-  Instance instance,
-) async {
-  final BazarrApi api = await ref.watch(bazarrApiProvider(instance).future);
-  final List<BazarrWantedEpisode> eps = await api.getWantedEpisodes();
-  final List<BazarrWantedMovie> movies = await api.getWantedMovies();
-  return <BazarrWantedRow>[
-    for (final BazarrWantedEpisode e in eps)
-      BazarrWantedRow(
-        title: e.seriesTitle,
-        subtitle: <String>[
-          if (e.episodeNumber.isNotEmpty) e.episodeNumber,
-          if (e.episodeTitle.isNotEmpty) e.episodeTitle,
-        ].join(' · '),
-        missing: e.missingSubtitles,
-        isMovie: false,
-      ),
-    for (final BazarrWantedMovie m in movies)
-      BazarrWantedRow(
-        title: m.title,
-        subtitle: 'Movie',
-        missing: m.missingSubtitles,
-        isMovie: true,
-      ),
-  ];
-});
-
 /// All series with subtitle status, sorted by title.
 final bazarrSeriesProvider =
     FutureProvider.family<List<BazarrSeries>, Instance>((
@@ -102,27 +72,6 @@ final bazarrEpisodesProvider =
   return eps;
 });
 
-/// Unified subtitle history (episodes + movies), newest first.
-final bazarrHistoryProvider =
-    FutureProvider.family<List<BazarrHistoryItem>, Instance>((
-  Ref ref,
-  Instance instance,
-) async {
-  final BazarrApi api = await ref.watch(bazarrApiProvider(instance).future);
-  final List<BazarrHistoryItem> eps = await api.getEpisodeHistory();
-  final List<BazarrHistoryItem> movies = await api.getMovieHistory();
-  final List<BazarrHistoryItem> all = <BazarrHistoryItem>[...eps, ...movies];
-  all.sort((BazarrHistoryItem a, BazarrHistoryItem b) {
-    final DateTime? da = _parseHistoryTs(a.parsedTimestamp);
-    final DateTime? db = _parseHistoryTs(b.parsedTimestamp);
-    if (da == null || db == null) {
-      return 0;
-    }
-    return db.compareTo(da);
-  });
-  return all;
-});
-
 /// Unified blacklist (episodes + movies). The movies endpoint errors on some
 /// Bazarr versions, so it is tolerated independently of the episodes one.
 final bazarrBlacklistProvider =
@@ -140,35 +89,6 @@ final bazarrBlacklistProvider =
   }
   return <BazarrBlacklistItem>[...eps, ...movies];
 });
-
-/// Parses Bazarr's `parsed_timestamp` ("MM/DD/YY HH:MM:SS") for sorting.
-DateTime? _parseHistoryTs(String s) {
-  try {
-    final List<String> parts = s.trim().split(' ');
-    if (parts.length < 2) {
-      return null;
-    }
-    final List<String> d = parts[0].split('/');
-    final List<String> t = parts[1].split(':');
-    if (d.length < 3 || t.length < 3) {
-      return null;
-    }
-    int yy = int.parse(d[2]);
-    if (yy < 100) {
-      yy += 2000;
-    }
-    return DateTime(
-      yy,
-      int.parse(d[0]),
-      int.parse(d[1]),
-      int.parse(t[0]),
-      int.parse(t[1]),
-      int.parse(t[2]),
-    );
-  } on Object {
-    return null;
-  }
-}
 
 /// System status (versions, OS, database, uptime). Also the source of the
 /// version gates (`bazarrVersionInfoProvider`), so it refreshes itself after

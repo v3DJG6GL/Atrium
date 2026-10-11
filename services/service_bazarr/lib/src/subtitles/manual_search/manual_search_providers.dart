@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bazarr_api.dart';
 import '../../bazarr_providers.dart';
+import '../../history/bazarr_history_providers.dart';
 import '../../models/bazarr_models.dart';
 import '../bazarr_activity.dart';
 import '../bazarr_subtitle_params.dart';
@@ -78,7 +79,6 @@ List<WatchedProvider> bazarrManualSearchRefresh(
             bazarrSeriesProvider(bazarr),
           ],
       },
-      bazarrWantedProvider(bazarr),
       bazarrBadgesProvider(bazarr),
-      bazarrHistoryProvider(bazarr),
+      ...bazarrHistoryRefresh(bazarr),
     ];

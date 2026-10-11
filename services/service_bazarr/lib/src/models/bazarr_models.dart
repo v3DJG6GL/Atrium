@@ -457,21 +457,6 @@ class BazarrHistoryPage {
   final int total;
 }
 
-/// A flattened "needs subtitles" row, unifying episodes + movies for the UI.
-class BazarrWantedRow {
-  const BazarrWantedRow({
-    required this.title,
-    required this.subtitle,
-    required this.missing,
-    required this.isMovie,
-  });
-
-  final String title;
-  final String subtitle;
-  final List<BazarrSubtitle> missing;
-  final bool isMovie;
-}
-
 /// Bazarr returns `year` as a string ("2026") for series and movies; parse it
 /// leniently to an int so the UI can treat it as a number (null if blank).
 int? _yearFromJson(dynamic value) {
